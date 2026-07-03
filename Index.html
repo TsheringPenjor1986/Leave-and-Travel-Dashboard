@@ -7629,7 +7629,10 @@ function loadStaffDir(){
   // initialized before it's referenced.
   _staffFetchPromise = new Promise(function(resolve){
     setTimeout(function(){
-      fetchStaffFromSheet().then(resolve).catch(resolve);
+      fetchStaffFromSheet().then(resolve).catch(function(err){
+        console.error('fetchStaffFromSheet (initial) failed:', err);
+        resolve();
+      });
     }, 0);
   });
 }
@@ -8944,15 +8947,33 @@ function openModalForEmp(name, dept){
 }
 
 if(!window.__WWF_PREVIEW_MODE__){
-  loadRecords();
-  loadManualInOffice();
-  loadStaffDir();
-  renderStaffTable();
-  initCalendar();
-  renderDashboard();
-  runReturnAutomation();
-  runUpcomingToOutAutomation();
-  renderSelfRecords();
+  try { loadRecords(); } catch(e){ console.error('loadRecords failed:', e); }
+  try { loadManualInOffice(); } catch(e){ console.error('loadManualInOffice failed:', e); }
+  try { loadStaffDir(); } catch(e){ console.error('loadStaffDir failed:', e); }
+  try { renderStaffTable(); } catch(e){ console.error('renderStaffTable failed:', e); }
+  try { initCalendar(); } catch(e){ console.error('initCalendar failed:', e); }
+  try { renderDashboard(); } catch(e){ console.error('renderDashboard failed:', e); }
+  try { runReturnAutomation(); } catch(e){ console.error('runReturnAutomation failed:', e); }
+  try { runUpcomingToOutAutomation(); } catch(e){ console.error('runUpcomingToOutAutomation failed:', e); }
+  try { renderSelfRecords(); } catch(e){ console.error('renderSelfRecords failed:', e); }
+
+  // ── Safety-net staff/priority refresh ────────────────────────────────
+  // Runs independently of the block above, on window 'load'. If anything
+  // earlier in startup throws and silently prevents loadStaffDir()'s
+  // deferred fetchStaffFromSheet() from ever running, this guarantees the
+  // Priority order from the sheet still gets picked up shortly after the
+  // page finishes loading — and logs loudly instead of failing silently.
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      if(typeof fetchStaffFromSheet !== 'function') return;
+      fetchStaffFromSheet().then(function(){
+        try { rebuildIOPriority(); renderDashboard(); renderStaffTable(); }
+        catch(e){ console.error('Post-fetch refresh failed:', e); }
+      }).catch(function(err){
+        console.error('Safety-net staff sheet fetch failed:', err);
+      });
+    }, 500);
+  });
 }
 
 
